@@ -1,4 +1,17 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import {
+  dbGetUsers, dbGetClients, dbGetProducts, dbGetAppointments,
+  dbGetMessages, dbGetInventory, dbGetCustody, dbGetCustodyRequests,
+  dbGetContracts, dbGetTasks, dbGetTaskComments, dbGetAuditLog,
+  dbLogin, dbCreateAppointment, dbUpdateAppointment,
+  dbCreateClient, dbUpdateClient, dbCreateUser, dbUpdateUser,
+  dbUpdateInventory, dbCreateCustody, dbCreateCustodyRequest,
+  dbUpdateCustodyRequest, dbCreateContract, dbUpdateContract,
+  dbCreateTask, dbUpdateTask, dbAddTaskComment, dbSendMessage, dbAddAuditLog,
+  mapSupabaseToApp
+} from './src/db.js';
+import { supabase } from './src/supabase.js';
+// مسارات صحيحة من root
 
 /* ═══════════════════════════════════════════
    نقاء المتحدة - نظام إدارة مواعيد الصيانة
@@ -335,7 +348,41 @@ export default function NaqaaSystem() {
   const [showNotifs, setShowNotifs] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
-  useEffect(() => { setData(makeSampleData()); }, []);
+  const [dbLoading, setDbLoading] = useState(false);
+
+  useEffect(() => {
+    const loadFromSupabase = async () => {
+      if (!supabase) {
+        setData(makeSampleData());
+        return;
+      }
+      setDbLoading(true);
+      try {
+        const [users, clients, products, appointments, messages, inventory,
+               custody, custodyRequests, contracts, tasks, auditLog] = await Promise.all([
+          dbGetUsers(), dbGetClients(), dbGetProducts(), dbGetAppointments(),
+          dbGetMessages(null), dbGetInventory(), dbGetCustody(), dbGetCustodyRequests(),
+          dbGetContracts(), dbGetTasks(), dbGetAuditLog()
+        ]);
+        const raw = { users, clients, products, appointments,
+          messages: messages || [], inventory: inventory || [],
+          custody, custodyRequests, contracts, tasks, auditLog };
+        const mapped = mapSupabaseToApp(raw);
+        if (mapped && mapped.users && mapped.users.length > 0) {
+          setData(mapped);
+        } else {
+          console.warn('Supabase returned empty data, using demo data');
+          setData(makeSampleData());
+        }
+      } catch (e) {
+        console.error('Supabase load error:', e);
+        setData(makeSampleData());
+      } finally {
+        setDbLoading(false);
+      }
+    };
+    loadFromSupabase();
+  }, []);
   useEffect(() => {
     const check = () => {
       const m = window.innerWidth <= 768;
@@ -373,9 +420,23 @@ export default function NaqaaSystem() {
     return list;
   }, [data, cityFilter, user]);
 
+  // ─── شاشة التحميل ───
+  if (dbLoading || !data) {
+    return (
+      <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
+        minHeight:"100vh", background:"linear-gradient(135deg, #0C4A6E, #0284C7)", gap:16 }}>
+        <div style={{ width:60, height:60, borderRadius:"50%", border:"4px solid rgba(255,255,255,0.3)",
+          borderTop:"4px solid white", animation:"spin 1s linear infinite" }}/>
+        <div style={{ color:"white", fontSize:18, fontWeight:700 }}>جاري تحميل النظام...</div>
+        <div style={{ color:"rgba(255,255,255,0.6)", fontSize:13 }}>نقاء المتحدة</div>
+        <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+      </div>
+    );
+  }
+
   // ─── صفحة تسجيل الدخول ───
   if (!user) {
-    return <LoginPage data={data} onLogin={setUser} />;
+    return <LoginPage data={data} onLogin={setUser} supabase={supabase} />;
   }
 
   const unread = notifs.filter(n => !n.read).length;
@@ -1900,22 +1961,46 @@ export default function NaqaaSystem() {
 // ═══════════════════════
 //  صفحة تسجيل الدخول
 // ═══════════════════════
-function LoginPage({ data, onLogin }) {
+function LoginPage({ data, onLogin, supabase }) {
   const [phone, setPhone] = useState("");
   const [pass, setPass] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!data) return;
     setError("");
     setLoading(true);
-    setTimeout(() => {
+    try {
+      // تسجيل الدخول عبر Supabase إذا متاح
+      if (supabase) {
+        const { data: rows, error: err } = await supabase
+          .from('users')
+          .select('*')
+          .eq('phone', phone)
+          .eq('password', pass)
+          .eq('active', true)
+          .single();
+        if (!err && rows) {
+          const u = {
+            id: rows.id, name: rows.name, phone: rows.phone, pass: rows.password,
+            role: rows.role, city: rows.city, permissions: rows.permissions || [], active: rows.active
+          };
+          onLogin(u);
+          return;
+        }
+      }
+      // fallback على البيانات المحلية
       const u = data.users.find(u => u.phone === phone && u.pass === pass);
       if (u) { onLogin(u); }
       else { setError("رقم الجوال أو كلمة المرور غير صحيحة"); }
+    } catch (e) {
+      const u = data.users.find(u => u.phone === phone && u.pass === pass);
+      if (u) { onLogin(u); }
+      else { setError("رقم الجوال أو كلمة المرور غير صحيحة"); }
+    } finally {
       setLoading(false);
-    }, 600);
+    }
   };
 
   return (

@@ -2,16 +2,26 @@
   "name": "naqaa-united-system",
   "version": "1.0.0",
   "description": "نظام إدارة صيانة فلاتر المياه - نقاء المتحدة",
-  "main": "src-app.jsx",
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
   },
-  "keywords": ["water-filter", "maintenance", "saudi-arabia", "react"],
+  "keywords": [
+    "water-filter",
+    "maintenance",
+    "saudi-arabia",
+    "react"
+  ],
   "author": "Naqaa United",
   "license": "MIT",
   "dependencies": {
+    "@supabase/supabase-js": "^2.98.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.0",
+    "vite": "^5.0.0"
   }
 }
